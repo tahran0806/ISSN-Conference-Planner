@@ -164,6 +164,70 @@
     line-height: 1;
   }
   .star.active { color: var(--gold); }
+  .star-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 60px;
+    justify-self: end;
+  }
+  .star-label {
+    font-size: 0.7rem;
+    color: #888;
+    text-align: center;
+    max-width: 60px;
+    line-height: 1.15;
+    margin-top: 2px;
+  }
+  .conflict-toast {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    width: 320px;
+    background: #fff4e5;
+    border-left: 4px solid #b06000;
+    color: #1a2332;
+    padding: 14px 36px 14px 14px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    z-index: 200;
+    transform: translateX(calc(100% + 24px));
+    opacity: 0;
+    transition: transform 200ms ease, opacity 200ms ease;
+  }
+  .conflict-toast.visible {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  .conflict-toast.dismiss {
+    transform: translateX(calc(100% + 24px));
+    opacity: 0;
+  }
+  .conflict-toast-close {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #666;
+    padding: 2px 6px;
+  }
+  .conflict-toast-heading {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #7a4500;
+  }
+  .conflict-toast-list {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+  .conflict-toast-list li { margin-bottom: 4px; }
+  .conflict-toast-list li:last-child { margin-bottom: 0; }
   .expand-btn {
     background: none;
     border: 1px solid var(--border);
@@ -285,8 +349,13 @@
     }
     .live-jump-btn { margin-left: 18px; }
     .session { grid-template-columns: 1fr; }
-    .star { justify-self: end; }
+    .star-col { justify-self: end; }
     .time { font-size: 0.95rem; }
+    .conflict-toast {
+      left: 10px;
+      right: 10px;
+      width: auto;
+    }
   }
 </style>
 </head>
@@ -665,6 +734,109 @@ let expanded = new Set();
 
 function key(s) { return s.day + "_" + s.num + "_" + s.title.slice(0, 20); }
 
+// ===== CONFLICT WARNINGS =====
+let conflictToastTimer = null;
+
+function posterSession() {
+  return SESSIONS.find(s => s.type === "yours") || null;
+}
+
+function sessionsForConflictCheck() {
+  const keys = new Set(starred);
+  const poster = posterSession();
+  if (poster) keys.add(key(poster));
+  return SESSIONS.filter(s => keys.has(key(s)));
+}
+
+function sessionTimeRange(session) {
+  return parseSessionTime(session);
+}
+
+function timeRangesOverlap(a, b) {
+  return a.startDate < b.endDate && b.startDate < a.endDate;
+}
+
+function timeRangesBackToBack(a, b) {
+  return a.endDate.getTime() === b.startDate.getTime() ||
+    b.endDate.getTime() === a.startDate.getTime();
+}
+
+function sessionsConflict(s1, s2) {
+  if (s1.day !== s2.day) return false;
+  const t1 = sessionTimeRange(s1);
+  const t2 = sessionTimeRange(s2);
+  if (!t1 || !t2) return false;
+  if (timeRangesOverlap(t1, t2)) return true;
+  if (timeRangesBackToBack(t1, t2) && s1.room !== s2.room) return true;
+  return false;
+}
+
+function findConflictsFor(session) {
+  return sessionsForConflictCheck().filter(s => key(s) !== key(session) && sessionsConflict(session, s));
+}
+
+function sessionStartTimeLabel(s) {
+  const normalized = s.time.replace(/\u2013/g, "-");
+  if (normalized.includes("-")) {
+    const start = normalized.split("-")[0].trim();
+    const mer = s.time.match(/\b(AM|PM)\b/i);
+    if (mer && !/\b(AM|PM)\b/i.test(start)) return `${start} ${mer[0]}`;
+    return start;
+  }
+  return s.time;
+}
+
+function shortSessionTitle(s) {
+  return s.title.length > 42 ? s.title.slice(0, 39) + "..." : s.title;
+}
+
+function formatConflictToastLine(s) {
+  if (s.type === "yours") {
+    return `YOUR poster presentation — ${s.day} ${sessionStartTimeLabel(s)}`;
+  }
+  return `#${s.num} ${shortSessionTitle(s)} — ${s.time}`;
+}
+
+function conflictBadgeLabel(other) {
+  return other.type === "yours" ? "YOUR poster" : `#${other.num}`;
+}
+
+function starConflictBadgeHtml(s) {
+  if (!starredOnly) return "";
+  const conflicts = findConflictsFor(s);
+  if (!conflicts.length) return "";
+  const labels = conflicts.map(conflictBadgeLabel).join(", ");
+  return `<span class="badge warn">⚠ Conflicts with ${labels}</span>`;
+}
+
+function dismissConflictToast() {
+  const toast = document.getElementById("conflictToast");
+  if (!toast) return;
+  clearTimeout(conflictToastTimer);
+  conflictToastTimer = null;
+  toast.classList.remove("visible");
+  toast.classList.add("dismiss");
+  setTimeout(() => toast.remove(), 200);
+}
+
+function showConflictToast(conflicts) {
+  clearTimeout(conflictToastTimer);
+  conflictToastTimer = null;
+  document.getElementById("conflictToast")?.remove();
+  const toast = document.createElement("div");
+  toast.id = "conflictToast";
+  toast.className = "conflict-toast";
+  toast.innerHTML = `
+    <button type="button" class="conflict-toast-close" aria-label="Close">&times;</button>
+    <div class="conflict-toast-heading">⚠ Schedule conflict</div>
+    <ul class="conflict-toast-list">${conflicts.map(c => `<li>${escapeHtml(formatConflictToastLine(c))}</li>`).join("")}</ul>
+  `;
+  toast.querySelector(".conflict-toast-close").addEventListener("click", dismissConflictToast);
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("visible"));
+  conflictToastTimer = setTimeout(dismissConflictToast, 6000);
+}
+
 function render() {
   const container = document.getElementById("sessions");
   container.innerHTML = "";
@@ -728,18 +900,30 @@ function renderSession(s) {
         ${s.sponsor ? `<span class="badge">Sponsored: ${s.sponsor}</span>` : ''}
         ${s.note ? `<span class="badge">${s.note}</span>` : ''}
         ${s.conflict ? `<span class="badge warn">⚠ ${s.conflict}</span>` : ''}
+        ${starConflictBadgeHtml(s)}
       </div>
       ${s.desc ? `<div class="description">${s.desc}</div>` : ''}
       ${s.desc ? `<button class="expand-btn" onclick="toggleExpand('${k.replace(/'/g,"\\'")}')">${isExpanded ? '− Hide details' : '+ Show details'}</button>` : ''}
     </div>
-    <button class="star ${isStarred ? 'active' : ''}" onclick="toggleStar('${k.replace(/'/g,"\\'")}')" title="${isStarred ? 'Unstar' : 'Star'}">★</button>
+    ${s.type === "break" ? "" : `<div class="star-col">
+      <button class="star ${isStarred ? 'active' : ''}" onclick="toggleStar('${k.replace(/'/g,"\\'")}')" title="${isStarred ? 'Unstar' : 'Star'}">★</button>
+      <span class="star-label">Mark as interesting</span>
+    </div>`}
   `;
   return div;
 }
 
 function toggleStar(k) {
-  if (starred.includes(k)) starred = starred.filter(x => x !== k);
-  else starred.push(k);
+  if (starred.includes(k)) {
+    starred = starred.filter(x => x !== k);
+  } else {
+    starred.push(k);
+    const session = SESSIONS.find(s => key(s) === k);
+    if (session && sessionTimeRange(session)) {
+      const conflicts = findConflictsFor(session);
+      if (conflicts.length) showConflictToast(conflicts);
+    }
+  }
   localStorage.setItem("issn2026_starred", JSON.stringify(starred));
   updateScheduleHint();
   render();
