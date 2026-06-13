@@ -204,6 +204,12 @@
     cursor: pointer;
     color: var(--muted);
   }
+  .schedule-hint {
+    flex: 1 1 100%;
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
   @media (max-width: 640px) {
     .session { grid-template-columns: 1fr; }
     .star { justify-self: end; }
@@ -226,6 +232,9 @@
       <button class="day-tab" data-day="Friday">Fri</button>
     </div>
     <button class="toggle-starred" id="starredOnly">★ Starred only</button>
+    <button class="toggle-starred" id="printSchedule" type="button">Print My Schedule</button>
+    <button class="toggle-starred" id="exportCalendar" type="button">Export to Calendar (.ics)</button>
+    <p class="schedule-hint" id="scheduleHint" hidden>Print and calendar export will include your poster only until you star other sessions.</p>
   </div>
   <div id="sessions"></div>
 </div>
@@ -417,6 +426,7 @@ function toggleStar(k) {
   if (starred.includes(k)) starred = starred.filter(x => x !== k);
   else starred.push(k);
   localStorage.setItem("issn2026_starred", JSON.stringify(starred));
+  updateScheduleHint();
   render();
 }
 
@@ -432,6 +442,252 @@ function showBio(name) {
   document.getElementById("modalBg").classList.add("open");
 }
 function closeModal() { document.getElementById("modalBg").classList.remove("open"); }
+
+function hasStarredSessions() {
+  return SESSIONS.some(s => starred.includes(key(s)));
+}
+
+function myScheduleSessions() {
+  return SESSIONS.filter(s => starred.includes(key(s)) || s.type === "yours");
+}
+
+function updateScheduleHint() {
+  document.getElementById("scheduleHint").hidden = hasStarredSessions();
+}
+
+function sessionStartMinutes(s) {
+  const times = parseSessionTimes(s);
+  if (!times) return 0;
+  const m = times.start.match(/T(\d{2})(\d{2})/);
+  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
+}
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+const ICS_MONTHS = { June: 6 };
+const SCHEDULE_DAYS = ["Wednesday", "Thursday", "Friday"];
+
+function pad(n) { return String(n).padStart(2, "0"); }
+
+function icsEscape(text) {
+  return String(text || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\n/g, "\\n");
+}
+
+function foldIcsLine(line) {
+  if (line.length <= 75) return line;
+  const parts = [line.slice(0, 75)];
+  let rest = line.slice(75);
+  while (rest.length > 74) {
+    parts.push(" " + rest.slice(0, 74));
+    rest = rest.slice(74);
+  }
+  if (rest) parts.push(" " + rest);
+  return parts.join("\r\n");
+}
+
+function parseMeridiem(part) {
+  const match = part.match(/\b(AM|PM)\b/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
+function parseClock(part, meridiem) {
+  const cleaned = part.replace(/\s*(AM|PM)\s*/gi, "").trim();
+  const match = cleaned.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match || !meridiem) return null;
+  let hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  if (meridiem === "PM" && hour !== 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  return { hour, minute };
+}
+
+function parseSessionTimes(s) {
+  const [monthName, dayStr] = s.date.split(" ");
+  const month = ICS_MONTHS[monthName];
+  const day = parseInt(dayStr, 10);
+  if (!month || !day) return null;
+
+  const normalized = s.time.replace(/\u2013/g, "-").trim();
+  const parts = normalized.includes("-")
+    ? normalized.split("-").map(p => p.trim())
+    : [normalized.trim()];
+
+  const endMer = parts.length > 1 ? (parseMeridiem(parts[1]) || parseMeridiem(parts[0])) : parseMeridiem(parts[0]);
+  const startMer = parseMeridiem(parts[0]) || endMer;
+  const start = parseClock(parts[0], startMer);
+  if (!start) return null;
+
+  let end;
+  if (parts.length > 1) {
+    end = parseClock(parts[1], parseMeridiem(parts[1]) || startMer);
+  }
+  if (!end) {
+    end = { hour: start.hour, minute: start.minute + 30 };
+    if (end.minute >= 60) { end.hour += 1; end.minute -= 60; }
+  }
+
+  const fmt = (h, m) => `2026${pad(month)}${pad(day)}T${pad(h)}${pad(m)}00`;
+  return {
+    start: fmt(start.hour, start.minute),
+    end: fmt(end.hour, end.minute)
+  };
+}
+
+function icsDescription(s) {
+  const speakers = s.speakers.join(", ");
+  if (speakers && s.desc) return speakers + "\n\n" + s.desc;
+  return speakers || s.desc || "";
+}
+
+function buildIcsEvent(s) {
+  const times = parseSessionTimes(s);
+  if (!times) return null;
+  return [
+    "BEGIN:VEVENT",
+    foldIcsLine(`UID:${icsEscape(key(s))}`),
+    foldIcsLine(`DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}`),
+    foldIcsLine(`DTSTART;TZID=America/New_York:${times.start}`),
+    foldIcsLine(`DTEND;TZID=America/New_York:${times.end}`),
+    foldIcsLine(`SUMMARY:${icsEscape(s.title)}`),
+    foldIcsLine(`LOCATION:${icsEscape(s.room || "")}`),
+    foldIcsLine(`DESCRIPTION:${icsEscape(icsDescription(s))}`),
+    "END:VEVENT"
+  ].join("\r\n");
+}
+
+function buildIcs(sessions) {
+  const events = sessions.map(buildIcsEvent).filter(Boolean);
+  const header = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//ISSN 2026 Planner//EN",
+    "BEGIN:VTIMEZONE",
+    "TZID:America/New_York",
+    "X-LIC-LOCATION:America/New_York",
+    "BEGIN:DAYLIGHT",
+    "TZOFFSETFROM:-0500",
+    "TZOFFSETTO:-0400",
+    "TZNAME:EDT",
+    "DTSTART:19700308T020000",
+    "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU",
+    "END:DAYLIGHT",
+    "BEGIN:STANDARD",
+    "TZOFFSETFROM:-0400",
+    "TZOFFSETTO:-0500",
+    "TZNAME:EST",
+    "DTSTART:19701101T020000",
+    "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
+    "END:STANDARD",
+    "END:VTIMEZONE"
+  ].join("\r\n");
+  return header + "\r\n" + events.join("\r\n") + "\r\nEND:VCALENDAR\r\n";
+}
+
+function buildPrintDocument(sessions) {
+  const posterOnly = !hasStarredSessions();
+  let body = "";
+
+  if (posterOnly) {
+    body += "<p class=\"note\">No talks starred yet — only your poster presentation is included. Star sessions in the planner to add them here.</p>";
+  }
+
+  SCHEDULE_DAYS.forEach(day => {
+    const daySessions = sessions
+      .filter(s => s.day === day)
+      .sort((a, b) => sessionStartMinutes(a) - sessionStartMinutes(b));
+    if (daySessions.length === 0) return;
+
+    body += `<h2>${escapeHtml(day)} &bull; ${escapeHtml(daySessions[0].date)}</h2>`;
+    daySessions.forEach(s => {
+      body += `<div class="item">
+        <div class="meta-row"><span class="time">${escapeHtml(s.time)}</span><span class="num">#${escapeHtml(s.num)}</span></div>
+        <div class="title">${escapeHtml(s.title)}</div>
+        ${s.speakers.length ? `<div class="speakers">${escapeHtml(s.speakers.join(", "))}</div>` : ""}
+        ${s.room ? `<div class="room">${escapeHtml(s.room)}</div>` : ""}
+        <div class="notes">Notes: ________________________________________________</div>
+      </div>`;
+    });
+  });
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>My ISSN 2026 Schedule</title>
+<style>
+  @page { size: letter; margin: 0.75in; }
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #000;
+    background: #fff;
+    margin: 0;
+    line-height: 1.4;
+    font-size: 11pt;
+  }
+  h1 { font-size: 18pt; margin: 0 0 4px; font-weight: 700; text-align: center; }
+  .subtitle { text-align: center; margin: 0 0 20px; font-size: 11pt; color: #333; }
+  .note { font-size: 10pt; color: #444; border: 1px solid #999; padding: 8px 10px; margin: 0 0 16px; }
+  h2 {
+    font-size: 12pt;
+    margin: 18px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #000;
+    font-weight: 700;
+  }
+  .item { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px dotted #aaa; break-inside: avoid; }
+  .meta-row { display: flex; gap: 12px; font-size: 10pt; margin-bottom: 2px; }
+  .time { font-weight: 700; min-width: 120px; }
+  .num { color: #333; }
+  .title { font-weight: 700; margin-bottom: 2px; }
+  .speakers, .room { font-size: 10pt; color: #222; }
+  .notes { margin-top: 6px; font-size: 10pt; color: #444; border-bottom: 1px solid #ccc; min-height: 1.2em; }
+</style>
+</head>
+<body>
+  <h1>My ISSN 2026 Schedule</h1>
+  <p class="subtitle">[Your Name] &bull; The Westin Fort Lauderdale Beach Resort &bull; June 17&ndash;19, 2026</p>
+  ${body}
+</body>
+</html>`;
+}
+
+function exportToCalendar() {
+  const sessions = myScheduleSessions();
+  const ics = buildIcs(sessions);
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "issn-2026-schedule.ics";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function printMySchedule() {
+  const sessions = myScheduleSessions();
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    alert("Pop-up blocked. Allow pop-ups for this page to print your schedule.");
+    return;
+  }
+  printWindow.document.open();
+  printWindow.document.write(buildPrintDocument(sessions));
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 300);
+}
 document.getElementById("modalBg").addEventListener("click", e => {
   if (e.target.id === "modalBg") closeModal();
 });
@@ -454,7 +710,10 @@ document.getElementById("search").addEventListener("input", e => {
   searchTerm = e.target.value;
   render();
 });
+document.getElementById("printSchedule").addEventListener("click", printMySchedule);
+document.getElementById("exportCalendar").addEventListener("click", exportToCalendar);
 
+updateScheduleHint();
 render();
 </script>
 </body>
