@@ -210,7 +210,80 @@
     font-size: 0.85rem;
     color: var(--muted);
   }
+  .live-banner {
+    background: var(--accent);
+    color: #fff;
+    max-height: 50px;
+    overflow: hidden;
+  }
+  .live-banner[hidden] { display: none; }
+  .live-banner-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    font-size: 0.88rem;
+    line-height: 1.3;
+  }
+  .live-pulse {
+    flex-shrink: 0;
+    font-size: 1.1rem;
+    line-height: 1;
+    opacity: 0.95;
+  }
+  .live-banner.live .live-pulse {
+    animation: bannerPulse 1.4s ease-in-out infinite;
+  }
+  .live-banner-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .live-jump-btn {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.8rem;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .live-jump-btn:hover { background: rgba(255, 255, 255, 0.28); }
+  @keyframes bannerPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.85); }
+  }
+  .session.live-now {
+    border-left: 4px solid var(--accent) !important;
+    animation: liveCardPulse 2s ease-in-out infinite;
+  }
+  .session.yours.live-now {
+    border-left: 4px solid var(--accent) !important;
+  }
+  @keyframes liveCardPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(31, 78, 120, 0.18); }
+    50% { box-shadow: 0 0 0 5px rgba(31, 78, 120, 0.08); }
+  }
   @media (max-width: 640px) {
+    .live-banner { max-height: none; }
+    .live-banner-inner {
+      flex-wrap: wrap;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+    }
+    .live-banner-text {
+      white-space: normal;
+      flex: 1 1 100%;
+    }
+    .live-jump-btn { margin-left: 18px; }
     .session { grid-template-columns: 1fr; }
     .star { justify-self: end; }
     .time { font-size: 0.95rem; }
@@ -222,6 +295,13 @@
   <h1>ISSN 2026 — Fort Lauderdale</h1>
   <p>The Westin Fort Lauderdale Beach Resort • June 17–19, 2026</p>
 </header>
+<div id="liveBanner" class="live-banner" hidden>
+  <div class="live-banner-inner">
+    <span class="live-pulse" aria-hidden="true">•</span>
+    <span id="liveBannerText" class="live-banner-text"></span>
+    <button type="button" id="liveJumpBtn" class="live-jump-btn" hidden>Jump to session</button>
+  </div>
+</div>
 <div class="container">
   <div class="controls">
     <input type="text" id="search" placeholder="Search title, speaker, topic…">
@@ -345,6 +425,237 @@ const SESSIONS = [
   {day:"Friday", date:"June 19", time:"11:30 AM", num:"Closing", title:"Closing Remarks", desc:"Closing remarks and look-ahead to 2027 (Jupiter, FL).", speakers:[], moderator:"", room:"Salons DEF", type:"event"}
 ];
 
+// ===== LIVE NOW =====
+const ET_TZ = "America/New_York";
+const CONFERENCE_START_KEY = 20260617;
+const ET_DATE_TO_DAY = {
+  "2026-6-17": "Wednesday",
+  "2026-6-18": "Thursday",
+  "2026-6-19": "Friday"
+};
+const CONFERENCE_DAY_ORDER = ["Wednesday", "Thursday", "Friday"];
+const ICS_MONTHS = { June: 6 };
+
+let liveSessionKey = null;
+let bannerTimer = null;
+
+function getEtParts(date = new Date()) {
+  const parts = {};
+  new Intl.DateTimeFormat("en-US", {
+    timeZone: ET_TZ,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(date).forEach(p => {
+    if (p.type !== "literal") parts[p.type] = parseInt(p.value, 10);
+  });
+  return parts;
+}
+
+function etDateKey(parts) {
+  return parts.year * 10000 + parts.month * 100 + parts.day;
+}
+
+function makeEtDate(year, month, day, hour, minute) {
+  return new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00-04:00`);
+}
+
+function liveParseMeridiem(part) {
+  const match = part.match(/\b(AM|PM)\b/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
+function liveParseClock(part, meridiem) {
+  const cleaned = part.replace(/\s*(AM|PM)\s*/gi, "").trim();
+  const match = cleaned.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match || !meridiem) return null;
+  let hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  if (meridiem === "PM" && hour !== 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  return { hour, minute };
+}
+
+function parseSessionTime(session) {
+  const [monthName, dayStr] = session.date.split(" ");
+  const month = ICS_MONTHS[monthName];
+  const day = parseInt(dayStr, 10);
+  if (!month || !day) return null;
+
+  const normalized = session.time.replace(/\u2013/g, "-").trim();
+  const parts = normalized.includes("-")
+    ? normalized.split("-").map(p => p.trim())
+    : [normalized.trim()];
+
+  const endMer = parts.length > 1 ? (liveParseMeridiem(parts[1]) || liveParseMeridiem(parts[0])) : liveParseMeridiem(parts[0]);
+  const startMer = liveParseMeridiem(parts[0]) || endMer;
+  const start = liveParseClock(parts[0], startMer);
+  if (!start) return null;
+
+  let end;
+  if (parts.length > 1) {
+    end = liveParseClock(parts[1], liveParseMeridiem(parts[1]) || startMer);
+  }
+  if (!end) {
+    let duration = 30;
+    if (session.num === "Welcome") duration = 10;
+    else if (session.num === "Closing") duration = 30;
+    end = { hour: start.hour, minute: start.minute + duration };
+    while (end.minute >= 60) { end.hour += 1; end.minute -= 60; }
+  }
+
+  return {
+    startDate: makeEtDate(2026, month, day, start.hour, start.minute),
+    endDate: makeEtDate(2026, month, day, end.hour, end.minute)
+  };
+}
+
+function buildSessionSchedule() {
+  const schedule = [];
+  for (const session of SESSIONS) {
+    const range = parseSessionTime(session);
+    if (!range) return [];
+    schedule.push({
+      session,
+      key: session.day + "_" + session.num + "_" + session.title.slice(0, 20),
+      ...range
+    });
+  }
+  return schedule.sort((a, b) => a.startDate - b.startDate);
+}
+
+const SESSION_SCHEDULE = buildSessionSchedule();
+
+function formatCountdown(ms) {
+  if (ms <= 0) return "0 days, 0 hours";
+  const totalHours = Math.floor(ms / 3600000);
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return `${days} day${days === 1 ? "" : "s"}, ${hours} hour${hours === 1 ? "" : "s"}`;
+}
+
+function formatEtTime(date) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: ET_TZ,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  }).format(date);
+}
+
+function findLiveSession(now) {
+  return SESSION_SCHEDULE.find(item => now >= item.startDate && now < item.endDate) || null;
+}
+
+function findNextSession(now) {
+  return SESSION_SCHEDULE.find(item => item.startDate > now) || null;
+}
+
+function lastSessionOfDay(dayName) {
+  const dayItems = SESSION_SCHEDULE.filter(item => item.session.day === dayName);
+  return dayItems.length ? dayItems[dayItems.length - 1] : null;
+}
+
+function setLiveSessionKey(k) {
+  if (liveSessionKey === k) return;
+  liveSessionKey = k;
+  render();
+}
+
+function scheduleBannerUpdate(intervalMs) {
+  clearInterval(bannerTimer);
+  bannerTimer = setInterval(updateLiveBanner, intervalMs);
+}
+
+function updateLiveBanner() {
+  const banner = document.getElementById("liveBanner");
+  const textEl = document.getElementById("liveBannerText");
+  const jumpBtn = document.getElementById("liveJumpBtn");
+  if (!banner || !SESSION_SCHEDULE.length) {
+    if (banner) banner.hidden = true;
+    return;
+  }
+
+  const now = new Date();
+  const et = getEtParts(now);
+  const dateKey = etDateKey(et);
+  const conferenceStart = SESSION_SCHEDULE[0].startDate;
+  const conferenceEnd = SESSION_SCHEDULE[SESSION_SCHEDULE.length - 1].endDate;
+
+  banner.classList.remove("live", "countdown", "between", "ended");
+  jumpBtn.hidden = true;
+
+  if (now >= conferenceEnd) {
+    banner.hidden = false;
+    banner.classList.add("ended");
+    textEl.textContent = "ISSN 2026 has ended. See you in Jupiter, FL — June 14–16, 2027.";
+    setLiveSessionKey(null);
+    clearInterval(bannerTimer);
+    bannerTimer = null;
+    return;
+  }
+
+  if (dateKey < CONFERENCE_START_KEY) {
+    banner.hidden = false;
+    banner.classList.add("countdown");
+    textEl.textContent = `ISSN 2026 starts in ${formatCountdown(conferenceStart - now)}`;
+    setLiveSessionKey(null);
+    scheduleBannerUpdate(60000);
+    return;
+  }
+
+  const live = findLiveSession(now);
+  if (live) {
+    banner.hidden = false;
+    banner.classList.add("live");
+    const s = live.session;
+    const speakers = s.speakers.length ? s.speakers.join(", ") : "";
+    const bits = [`LIVE NOW: ${s.num} — ${s.title}`];
+    if (speakers) bits.push(speakers);
+    if (s.room) bits.push(s.room);
+    textEl.textContent = bits.join(" · ");
+    jumpBtn.hidden = false;
+    setLiveSessionKey(live.key);
+    scheduleBannerUpdate(30000);
+    return;
+  }
+
+  setLiveSessionKey(null);
+  banner.hidden = false;
+  banner.classList.add("between");
+
+  const dayName = ET_DATE_TO_DAY[`${et.year}-${et.month}-${et.day}`];
+  const next = findNextSession(now);
+
+  if (!next) {
+    banner.hidden = true;
+    scheduleBannerUpdate(60000);
+    return;
+  }
+
+  if (dayName) {
+    const last = lastSessionOfDay(dayName);
+    if (last && now >= last.endDate && dayName !== "Friday") {
+      textEl.textContent = `Conference resumes tomorrow at ${formatEtTime(next.startDate)}`;
+      scheduleBannerUpdate(60000);
+      return;
+    }
+  }
+
+  const mins = Math.max(1, Math.round((next.startDate - now) / 60000));
+  textEl.textContent = `Next up: ${next.session.num} — ${next.session.title} in ${mins} min`;
+  scheduleBannerUpdate(60000);
+}
+
+function jumpToLiveSession() {
+  const el = document.getElementById("live-session");
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 // ===== STATE =====
 let activeDay = "all";
 let starredOnly = false;
@@ -394,6 +705,10 @@ function renderSession(s) {
   if (s.type === "yours") div.classList.add("yours");
   if (s.conflict) div.classList.add("conflict");
   if (isExpanded) div.classList.add("expanded");
+  if (k === liveSessionKey) {
+    div.classList.add("live-now");
+    div.id = "live-session";
+  }
 
   const speakersHtml = s.speakers.map(name =>
     BIOS[name] ? `<span class="speaker-link" onclick="showBio('${name.replace(/'/g,"\\'")}')">${name}</span>` : name
@@ -470,7 +785,6 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
-const ICS_MONTHS = { June: 6 };
 const SCHEDULE_DAYS = ["Wednesday", "Thursday", "Friday"];
 
 function pad(n) { return String(n).padStart(2, "0"); }
@@ -712,8 +1026,10 @@ document.getElementById("search").addEventListener("input", e => {
 });
 document.getElementById("printSchedule").addEventListener("click", printMySchedule);
 document.getElementById("exportCalendar").addEventListener("click", exportToCalendar);
+document.getElementById("liveJumpBtn").addEventListener("click", jumpToLiveSession);
 
 updateScheduleHint();
+updateLiveBanner();
 render();
 </script>
 </body>
