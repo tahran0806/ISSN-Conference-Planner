@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISSN 2026 Planner</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --ink: #1a2332;
+    --muted: #5b6478;
+    --accent: #1f4e78;
+    --accent-soft: #d9e1f2;
+    --gold: #f4c430;
+    --gold-soft: #fff2cc;
+    --gold-ink: #7c5b00;
+    --warn: #c0392b;
+    --warn-soft: #fdecea;
+    --border: #e3e7ee;
+    --break: #ededed;
+    --break-ink: #595959;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.5;
+  }
+  header {
+    background: var(--accent);
+    color: white;
+    padding: 24px 20px;
+    text-align: center;
+  }
+  header h1 { margin: 0 0 4px; font-size: 1.6rem; }
+  header p { margin: 0; opacity: 0.85; font-size: 0.95rem; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .controls {
+    background: var(--card);
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+  .controls input[type="text"] {
+    flex: 1;
+    min-width: 200px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  .day-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .day-tab {
+    padding: 8px 14px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-family: inherit;
+    color: var(--ink);
+  }
+  .day-tab.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .toggle-starred {
+    padding: 8px 14px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-family: inherit;
+  }
+  .toggle-starred.active {
+    background: var(--gold);
+    border-color: var(--gold);
+  }
+  .day-header {
+    margin: 24px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--accent-soft);
+    color: var(--accent);
+    font-size: 1.2rem;
+  }
+  .session {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent-soft);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: 110px 1fr auto;
+    gap: 14px;
+    align-items: start;
+  }
+  .session.break {
+    background: var(--break);
+    border-left-color: #bbb;
+    color: var(--break-ink);
+    font-style: italic;
+  }
+  .session.yours {
+    background: var(--gold-soft);
+    border-left-color: var(--gold);
+    border: 2px solid var(--gold);
+  }
+  .session.conflict {
+    border-left-color: var(--warn);
+  }
+  .time { font-weight: 600; color: var(--muted); font-size: 0.85rem; }
+  .session.yours .time { color: var(--gold-ink); }
+  .session-num { display: block; font-size: 0.75rem; opacity: 0.7; margin-top: 2px; }
+  .body .title { font-weight: 600; margin-bottom: 4px; }
+  .session.yours .body .title { color: var(--gold-ink); }
+  .meta { font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+  .meta strong { color: var(--ink); font-weight: 500; }
+  .speakers { font-size: 0.9rem; }
+  .speaker-link {
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: underline dotted;
+  }
+  .speaker-link:hover { color: var(--ink); }
+  .description {
+    font-size: 0.88rem;
+    color: var(--muted);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+    display: none;
+  }
+  .session.expanded .description { display: block; }
+  .badges { margin-top: 6px; }
+  .badge {
+    display: inline-block;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-right: 4px;
+  }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+  .star {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #ccc;
+    padding: 0;
+    line-height: 1;
+  }
+  .star.active { color: var(--gold); }
+  .expand-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: var(--muted);
+    margin-top: 6px;
+    font-family: inherit;
+  }
+  /* Modal for speaker bios */
+  .modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 100;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: white;
+    border-radius: 12px;
+    max-width: 520px;
+    width: 100%;
+    padding: 24px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+  .modal h3 { margin-top: 0; color: var(--accent); }
+  .modal .close {
+    float: right;
+    background: none;
+    border: none;
+    font-size: 1.4rem;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  @media (max-width: 640px) {
+    .session { grid-template-columns: 1fr; }
+    .star { justify-self: end; }
+    .time { font-size: 0.95rem; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>ISSN 2026 — Fort Lauderdale</h1>
+  <p>The Westin Fort Lauderdale Beach Resort • June 17–19, 2026</p>
+</header>
+<div class="container">
+  <div class="controls">
+    <input type="text" id="search" placeholder="Search title, speaker, topic…">
+    <div class="day-tabs">
+      <button class="day-tab active" data-day="all">All</button>
+      <button class="day-tab" data-day="Wednesday">Wed</button>
+      <button class="day-tab" data-day="Thursday">Thu</button>
+      <button class="day-tab" data-day="Friday">Fri</button>
+    </div>
+    <button class="toggle-starred" id="starredOnly">★ Starred only</button>
+  </div>
+  <div id="sessions"></div>
+</div>
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <button class="close" onclick="closeModal()">×</button>
+    <h3 id="modalName"></h3>
+    <p id="modalBio"></p>
+  </div>
+</div>
+
+<script>
+// ===== SPEAKER BIOS (from program) =====
+const BIOS = {
+  "Brandi Antonio": "Doctoral student in Kinesiology at UCF. Talk: Sodium Bicarbonate Use Among Runners — double-blind RCT on bicarbonate effects in 5km TT performance.",
+  "Graeme Close": "Professor of Applied Physiology and Sport Nutrition at Liverpool John Moores University. Former pro rugby league player. Leads the MSc Sport Nutrition program.",
+  "Shantih Coro": "Performance nutritionist with 20+ years in elite soccer. MS degrees from U Tampa and Real Madrid.",
+  "Jason Curtis": "Assistant Professor of Exercise Science at Belmont University. Associate Editor for JISSN.",
+  "Omar Eldakar": "Evolutionary Biologist and Associate Professor at NSU Florida. Research on adaptive behavior, sexual conflict, yawning, and human evolution.",
+  "Katie Emerson": "PhD(c) in Exercise Science, RD, CISSN. Senior Manager Scientific Affairs at Kyowa Hakko USA.",
+  "Tim Ziegenfuss": "Sports nutrition scientist, FISSN, CEO Center for Applied Health Sciences. Extensive work with Olympians, pros, and military populations.",
+  "Cassie Evans": "Dietitian with PhD in Human and Health Performance (Rocky Mountain U). Sports nutrition, ergogenic aids, body composition.",
+  "Sadio Fenner": "2nd-year PhD student at FSU. Prior BS/MS at Nebraska-Lincoln while competing in D1 Cross Country/Track.",
+  "Arny Ferrando": "Expert in skeletal muscle preservation across stressors (spaceflight, aging, trauma, military). 170+ publications. UAMS.",
+  "Fiona Ford": "Author of 'Back On Track.' High-performance coach, sports nutritionist, PhD student in ultra-endurance.",
+  "Drew Gonzalez": "Assistant Professor and lab director at Sam Houston State. Focus on tactical/occupational performance.",
+  "Andrew Jagim": "Mayo Clinic Sport Medicine Research Director.",
+  "Annette Zapp": "Retired firefighter Lt., founder Fire Rescue Wellness. Tactical fueling expert.",
+  "Katie Hirsch": "Assistant Professor in Exercise Science at the University of South Carolina, Arnold School of Public Health. Female metabolic health research.",
+  "Andy Holwerda": "Senior Team Leader, Muscle Research at Danone Global R&I. 20+ years studying dietary/PA effects on skeletal muscle via stable isotope methods.",
+  "Wendi Irlbeck": "Sports dietitian with 10+ years working with youth/high school/college athletes. Founder of Nutrition With Wendi.",
+  "Brittany Johnson": "RD/PhD scientist. Clinical research, product development, nutrition messaging in the GLP-1 era.",
+  "Douglas Kalman": "ISSN Co-Founder. Nova Southeastern University.",
+  "Lonnie Lowery": "Exercise physiology and nutrition expert. PhD from Kent State, former RD, Fellow of ISSN.",
+  "Brian McFarlin": "PhD/Post-doc from Purdue. Research on botanical compounds, immune health, oxidative stress, muscle recovery. University of North Texas.",
+  "Mike T. Nelson": "Research-focused fitness/nutrition educator. 18+ years on fat loss, strength, flexibility, health optimization.",
+  "Anna Oelmann": "MS Exercise Science (2026, USF). Research coordinator in physique/performance lab focusing on menopause in resistance-trained women.",
+  "Alyssa Parten": "Postdoc at UAB. Resistance training effects on cardiometabolic health in females across lifespan.",
+  "Antonella Schwarz": "Assistant Professor & Human Performance Lab Director at Barry University. Muscle physiology, nutrition, aging.",
+  "Ricky Romersi": "2nd-year PhD student in Sport Science at the University of South Carolina. Physiological assessment in athletes and tactical populations.",
+  "Allee Schellenberger": "Exercise Science student with a Sport Management minor at the University of Tampa.",
+  "Cassie Smith": "Sports nutrition content/marketing professional since 2011. Competitive weightlifter and CrossFit athlete.",
+  "Sofea Smith": "Master's student in Human Performance at UCF. Muscular adaptations, body composition, dietary supplementation.",
+  "Trent Stellingwerff": "Chief Performance Officer at Canadian Sport Institute Pacific (Victoria, BC).",
+  "Kristi Storoschuk": "PhD candidate in Queen's Muscle Physiology Lab. Exercise adaptations in carb/fat metabolism; nutritional ketosis.",
+  "Jeff Stout": "PhD (Nebraska). FISSN. Helped jumpstart the science of sports supplements. 30,000+ citations. Black belt in Judo. UCF.",
+  "Mel Sulaver": "Sports RD focused on women's health (preconception to postpartum).",
+  "Katie Vasenina": "Assistant Professor at the University of Tampa. Exercise/nutrition interventions, DOMS, performance.",
+  "Hunter Waldman": "Professor and sports nutrition researcher. Metabolic health, cognition, performance. Active in BJJ. University of North Alabama.",
+  "Emily Werner": "Team Dietitian for the Philadelphia 76ers (NBA) and Flyers (NHL). Nutrition Affairs Sport Lead for Timeline Longevity Co."
+};
+
+// ===== SESSION DATA =====
+const SESSIONS = [
+  // -------- WEDNESDAY JUNE 17 --------
+  {day:"Wednesday", date:"June 17", time:"8:50 AM", num:"Welcome", title:"Welcome and Introduction", desc:"", speakers:[], moderator:"Guillermo Escalante, DSc, FISSN", room:"Las Olas I, II, V, VI", type:"event"},
+  {day:"Wednesday", date:"June 17", time:"9:00–9:30 AM", num:"1", title:"Coffee as a Functional Beverage: Brew Methods and Additives", desc:"Covers how roast, grind, brew methods, and additives (collagen, creatine, botanicals, fats, sweeteners) alter coffee's phytochemicals and targeted health/performance benefits.", speakers:["Lonnie Lowery"], moderator:"Guillermo Escalante, DSc, FISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Wednesday", date:"June 17", time:"9:30–10:00 AM", num:"2", title:"Milk Casein-Derived Lactotripeptides (VPP & IPP): Evidence for Endothelial Function Enhancement and Potential Benefits in Physical Performance", desc:"Covers lactotripeptides (VPP/IPP) from casein for vascular function (ACE inhibition, NO signaling). Emerging links to reduced fatigue/DOMS, lower post-exercise stiffness, enhanced training pump, lean mass gains.", speakers:["Tim Ziegenfuss"], moderator:"Guillermo Escalante, DSc, FISSN", room:"Las Olas I, II, V, VI", sponsor:"Maypro"},
+  {day:"Wednesday", date:"June 17", time:"10:00–10:30 AM", num:"3", title:"What Comes After GLP-1 Therapy? A Perspective on the Potential Role of Traditional Sports Nutrition Ingredients", desc:"Explores GLP-1 rise (including celebrity/athlete promotion) and opportunities for sports nutrition to support lean mass preservation, exercise endurance, strength, and recovery during/after GLP-1 treatment.", speakers:["Brittany Johnson"], moderator:"Guillermo Escalante, DSc, FISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Wednesday", date:"June 17", time:"10:30–10:45 AM", num:"Break", title:"Quick Break", desc:"", speakers:[], moderator:"", room:"Las Olas I, II, V, VI", type:"break"},
+  {day:"Wednesday", date:"June 17", time:"10:45–11:00 AM", num:"4", title:"Recovering Muscle and Cognitive Performance with Astaxanthin", desc:"Reviews lab findings on astaxanthin for recovery: reduces muscle damage/inflammation/soreness, buffers mental fatigue, preserves cognitive function post-exercise/mental stress.", speakers:["Hunter Waldman"], moderator:"K. Michelle Singleton, PhD, CISSN", room:"Las Olas I, II, V, VI", sponsor:"AstaReal"},
+  {day:"Wednesday", date:"June 17", time:"11:00–11:30 AM", num:"5", title:"Buffer Up with Beta-Alanine", desc:"Beta-alanine is a non-essential amino acid and rate-limiting precursor for synthesizing carnosine in skeletal muscle. Covers applications across a wide variety of athletes.", speakers:["Jeff Stout"], moderator:"K. Michelle Singleton, PhD, CISSN", room:"Las Olas I, II, V, VI", sponsor:"Carnosyn"},
+  {day:"Wednesday", date:"June 17", time:"11:30 AM–12:00 PM", num:"6", title:"Creatine Unlocked for Student-Athletes: Translating Creatine Research on Muscle Performance, Injury Risk Reduction, and Safety into Practical, Evidence-Based Recommendations", desc:"Summarizes creatine evidence for muscle performance and injury risk reduction in youth/adolescents. Covers safety considerations and provides age- and sport-specific talking points.", speakers:["Wendi Irlbeck"], moderator:"K. Michelle Singleton, PhD, CISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Wednesday", date:"June 17", time:"12:00–1:30 PM", num:"Lunch", title:"Lunch Break", desc:"Dine at any of the hotel restaurants.", speakers:[], moderator:"", room:"Las Olas I, II, V, VI", type:"break"},
+  {day:"Wednesday", date:"June 17", time:"1:30–1:45 PM", num:"7", title:"An Update on Urolithin A and Its Relevance For Athletes", desc:"UA's current role in enhancing recovery, endurance, and strength in athletes, plus broader future applications for mitochondrial health.", speakers:["Emily Werner"], moderator:"Flavia Pereira, PhD, CISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Wednesday", date:"June 17", time:"1:45–2:00 PM", num:"8", title:"The Impact of Essential Amino Acids on Muscle and Tendon Adaptation After Eccentric Exercise", desc:"EAAs are highly anabolic — gram for gram more so than whole protein. The latest data on how EAAs affect tendons and skeletal muscle.", speakers:["Katie Vasenina"], moderator:"Flavia Pereira, PhD, CISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Wednesday", date:"June 17", time:"2:00–2:30 PM", num:"9", title:"Food Matrix and Nutrient Interactions on Muscle Reconditioning", desc:"How whole-food protein matrices (beef, milk, cheese, eggs, quark, vegan vs omnivorous meals) influence postprandial muscle protein synthesis beyond isolated protein effects.", speakers:["Andy Holwerda"], moderator:"Flavia Pereira, PhD, CISSN", room:"Las Olas I, II, V, VI", sponsor:"Danone"},
+  {day:"Wednesday", date:"June 17", time:"2:30–3:00 PM", num:"10", title:"Fueling Focus: Acute Cognizin Effects On Brain Activity and Cognitive Performance", desc:"Proof-of-concept study on acute citicoline (Cognizin) in healthy adults. Uses subjective scales, objective tasks, and EEG to show shifts in attention, reaction time, and cognitive immersion.", speakers:["Katie Emerson","Tim Ziegenfuss"], moderator:"Flavia Pereira, PhD, CISSN", room:"Las Olas I, II, V, VI", sponsor:"Kyowa"},
+  {day:"Wednesday", date:"June 17", time:"3:00–3:30 PM", num:"Break", title:"Break — Visit the Exhibitors", desc:"", speakers:[], moderator:"", room:"Las Olas I, II, V, VI", type:"break"},
+  {day:"Wednesday", date:"June 17", time:"3:30–3:45 PM", num:"11", title:"Men Crave Fat, Women Want Control", desc:"FTO rs9939609 gene's role in obesity risk and how lifestyle interacts with it. Sex differences and modifiable factors that counteract genetic predisposition.", speakers:["Cassie Evans"], moderator:"Lia Jiannine, PhD, FISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Wednesday", date:"June 17", time:"3:45–4:00 PM", num:"12", title:"Protein Shakes and Press Releases: Notes From a Career in Sports Nutrition & Media", desc:"Perspectives on the confluence of science and business, plus insights on AI, influencers, and media consumption.", speakers:["Cassie Smith"], moderator:"Lia Jiannine, PhD, FISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Wednesday", date:"June 17", time:"4:00–4:15 PM", num:"Break", title:"Break", desc:"", speakers:[], moderator:"", room:"Las Olas I, II, V, VI", type:"break"},
+  {day:"Wednesday", date:"June 17", time:"4:15–5:15 PM", num:"13", title:"Roger Harris Memorial Keynote: An Evidence-Based Approach to the Practice of Applied Sports Nutrition", desc:"Stellingwerff reflects on nearly 30 years applying evidence-based nutrition to optimize athlete performance. Real-world case studies of successes and failures.", speakers:["Trent Stellingwerff"], moderator:"Chad Kerksick, PhD, FISSN", room:"Las Olas I, II, V, VI", note:"Keynote"},
+
+  // -------- THURSDAY JUNE 18 --------
+  {day:"Thursday", date:"June 18", time:"8:30–8:45 AM", num:"14", title:"Snack Smart, Burn Better: Pistachio Snacking and Metabolic Flexibility", desc:"Pistachios as a model functional food, integrating RCTs, mechanistic studies, and dietary pattern research.", speakers:["Katie Hirsch"], moderator:"Erik Bustillo, MS, RD, CISSN, FISSN", room:"Las Olas I, II, V, VI", sponsor:"American Pistachio Growers"},
+  {day:"Thursday", date:"June 18", time:"8:45–9:00 AM", num:"15", title:"Enhanced Exercise Recovery with MSM Supplementation", desc:"Oral MSM improves training effectiveness, joint resilience, and fatigue resistance up to 15%. Molecular biomarkers of recovery in half-marathon runners.", speakers:["Brian McFarlin"], moderator:"Erik Bustillo, MS, RD, CISSN, FISSN", room:"Las Olas I, II, V, VI", sponsor:"Balchem / OptiMSM"},
+  {day:"Thursday", date:"June 18", time:"9:00–9:30 AM", num:"16", title:"Firefighter Response Physiology: Quantifying the Chaos", desc:"Multimodal monitoring of fire academy recruits over 18 weeks plus a 24-hour Emergency Training Day. Captures physiological/psychological stress via wearables, biomarkers, HRV, sleep.", speakers:["Andrew Jagim","Drew Gonzalez","Annette Zapp"], moderator:"Erik Bustillo, MS, RD, CISSN, FISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Thursday", date:"June 18", time:"9:30–10:00 AM", num:"17", title:"Essential Amino Acids and Cognition", desc:"Emerging data on EAA supplementation for cognitive resilience during psychological and physiological stress (pre-clinical models plus recent human RCTs).", speakers:["Arny Ferrando"], moderator:"Erik Bustillo, MS, RD, CISSN, FISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Thursday", date:"June 18", time:"10:00–10:30 AM", num:"Break", title:"Break — Visit the Exhibitors", desc:"", speakers:[], moderator:"", room:"Las Olas I, II, V, VI", type:"break"},
+  {day:"Thursday", date:"June 18", time:"10:30–11:00 AM", num:"18", title:"To Do, or Not to Do — Zone 2. That is the Question", desc:"Challenges broad Zone 2 endorsement for general-population mitochondrial/cardiometabolic benefits. Argues high-intensity exercise shows stronger evidence.", speakers:["Kristi Storoschuk"], moderator:"Brandi Antonio, PhD(c), CISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Thursday", date:"June 18", time:"11:00–11:15 AM", num:"19", title:"The Sport of Healthy Pregnancy: The Creatine Connection", desc:"Role of creatine in healthy pregnancy outcomes and maternal-fetal physiology.", speakers:["Douglas Kalman"], moderator:"Brandi Antonio, PhD(c), CISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Thursday", date:"June 18", time:"11:15 AM–12:30 PM", num:"Lunch", title:"Lunch Break", desc:"", speakers:[], moderator:"", room:"Las Olas I, II, V, VI", type:"break"},
+  {day:"Thursday", date:"June 18", time:"12:30–1:30 PM", num:"20", title:"President's Lecture — From Paper to Podium: Translating Sports Nutrition Science into Real-World Performance", desc:"Evolution of sport nutrition from descriptive physiology to targeted intervention science. The 'Paper to Podium' framework for when research truly impacts elite performance.", speakers:["Graeme Close"], moderator:"Chad Kerksick, PhD, FISSN", room:"Las Olas I, II, V, VI", note:"President's Lecture"},
+  {day:"Thursday", date:"June 18", time:"1:30–2:30 PM", num:"21", title:"ISSN's Data Blitz — The Best 60 Seconds of Your Scientific Life", desc:"Rapid-fire 60-second presentations of cutting-edge research from across the ISSN community.", speakers:[], moderator:"Guillermo Escalante, DSc, FISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Thursday", date:"June 18", time:"2:30–3:00 PM", num:"22", title:"Resistance Training vs. Menopause Replacement Therapy: Stronger Solutions for Perimenopause", desc:"Resistance training as frontline perimenopause intervention (mimicking/complementing estrogen effects). Paired with practical nutrition/supplement strategies.", speakers:["Alyssa Parten","Antonella Schwarz"], moderator:"Alyssa Parten, PhD", room:"Las Olas I, II, V, VI"},
+
+  // ===== USER'S POSTER =====
+  {day:"Thursday", date:"June 18", time:"3:00–3:30 PM", num:"POSTER", title:"⭐ YOUR POSTER PRESENTATION", desc:"Poster presentation alongside colleague Ian Jump. Auburn University — Nutrabolt Applied & Molecular Physiology Lab (Dr. Michael Roberts).", speakers:[], moderator:"", room:"Poster easel area", type:"yours", note:"Heads up — concurrent with Eldakar talk (#23)"},
+
+  {day:"Thursday", date:"June 18", time:"3:00–3:15 PM", num:"23", title:"Predicting Overhand Throwing Ability in Humans: Is It All in the Face?", desc:"Hypothesizes throwing originated in threat displays/combat before hunting in Homo lineage. Stronger selection in males; facial features as predictors of throwing proficiency.", speakers:["Omar Eldakar"], moderator:"Alyssa Parten, PhD", room:"Las Olas I, II, V, VI", conflict:"You'll likely miss this — concurrent with your poster"},
+  {day:"Thursday", date:"June 18", time:"3:15–3:30 PM", num:"24", title:"Data-Driven or Delusional: An Evidence and Experience-Based Guide to Wearable Technology", desc:"Evaluates wearable metrics (valuable vs misleading), limitations, importance of context, overnight HR priority, self-experimentation trends.", speakers:["Mike T. Nelson"], moderator:"Alyssa Parten, PhD", room:"Las Olas I, II, V, VI", conflict:"Concurrent with your poster window"},
+  {day:"Thursday", date:"June 18", time:"3:30–4:00 PM", num:"25", title:"Carbohydrate Periodization Strategies in Elite Professional Soccer Players", desc:"Systematic review of 15 studies from top leagues showing 8–15% gains in sprint/total/HSR via CHO periodization. 'Fuel for the work required,' train-low/compete-high.", speakers:["Shantih Coro"], moderator:"Jason Curtis, PhD, CISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Thursday", date:"June 18", time:"4:00–4:30 PM", num:"26", title:"Beyond the Data: The Human Side of Research in Women's Sport and Nutrition", desc:"Bridges controlled research with lived experience. Hormone-informed approaches, real-world variables (stress, sleep, cycle), academia-practice models.", speakers:["Mel Sulaver","Katie Hirsch"], moderator:"Jason Curtis, PhD, CISSN", room:"Las Olas I, II, V, VI"},
+  {day:"Thursday", date:"June 18", time:"4:30–5:00 PM", num:"Break", title:"Break — Check out vendors", desc:"", speakers:[], moderator:"", room:"Las Olas I, II, V, VI", type:"break"},
+  {day:"Thursday", date:"June 18", time:"5:00–6:15 PM", num:"Posters", title:"Happy Hour and Poster Presentations", desc:"Student authors at posters until 6:15 PM. Poster judging takes place; prizes awarded next day.", speakers:[], moderator:"", room:"Exhibit/poster hall", note:"Be at your poster"},
+
+  // -------- FRIDAY JUNE 19 --------
+  {day:"Friday", date:"June 19", time:"9:00–9:15 AM", num:"27", title:"Espresso Yourself — Caffeine Drives Energy Drink Performance", desc:"Caffeine in energy drinks, shots, pre-workouts, MIPS. Lab studies (including upcoming Ghost data) and reviews; dose-dependent jitter effects.", speakers:["Jason Curtis"], moderator:"Kworweinski Lafontant, MS, PhD(c)", room:"Salons DEF"},
+  {day:"Friday", date:"June 19", time:"9:15–9:30 AM", num:"28", title:"Ultraprocessed Foods and Ironman Triathletes", desc:"Survey of 75 Ironman athletes: 97% reported consuming ultra-processed sports foods. Examines food choices, usage patterns, and concerns during training.", speakers:["Fiona Ford"], moderator:"Kworweinski Lafontant, MS, PhD(c)", room:"Salons DEF"},
+  {day:"Friday", date:"June 19", time:"9:30–9:45 AM", num:"30", title:"Agreement Between Mixing Chamber and Breath-by-Breath Assessment of VO₂max", desc:"Intraindividual VO₂max variability between mixing chamber and breath-by-breath systems; practical testing considerations and agreement limits.", speakers:["Ricky Romersi"], moderator:"Richard Kreider, PhD, FISSN", room:"Salons DEF", note:"Greenwood Memorial Student Talks"},
+  {day:"Friday", date:"June 19", time:"9:45–10:00 AM", num:"31", title:"Sodium Bicarbonate Use Among Runners", desc:"Double-blind RCT on sodium bicarbonate (Maurten form) effects on 5km TT performance in trained male runners. Performance, blood bicarb/lactate, RPE.", speakers:["Brandi Antonio"], moderator:"Richard Kreider, PhD, FISSN", room:"Salons DEF", note:"Greenwood Memorial Student Talks"},
+  {day:"Friday", date:"June 19", time:"10:00–10:15 AM", num:"32", title:"Muscle Mommy Meets Menopause: A Survey of Fitness, Nutrition, and Hormone Therapy Practices in Resistance-Trained Women", desc:"Survey of fitness, nutrition, and hormone therapy practices among resistance-trained women navigating menopause-related changes.", speakers:["Anna Oelmann"], moderator:"Richard Kreider, PhD, FISSN", room:"Salons DEF", note:"Greenwood Memorial Student Talks"},
+  {day:"Friday", date:"June 19", time:"10:15–10:30 AM", num:"33", title:"Exogenous Ketones and the Elite Athlete", desc:"4-week double-blind RCT on exogenous ketone supplementation in trained athletes. Blood/saliva biomarkers (erythropoiesis, inflammation, recovery).", speakers:["Sadio Fenner"], moderator:"Richard Kreider, PhD, FISSN", room:"Salons DEF", note:"Greenwood Memorial Student Talks"},
+  {day:"Friday", date:"June 19", time:"10:30–10:45 AM", num:"34", title:"Exercise-Induced Muscle Swelling and Impedance Changes in the Biceps Brachii", desc:"Electrical impedance myography (EIM) to detect acute swelling post-bicep curls (~70% 1RM) in resistance-trained adults. Resistance, reactance, phase angle.", speakers:["Sofea Smith"], moderator:"Richard Kreider, PhD, FISSN", room:"Salons DEF", note:"Greenwood Memorial Student Talks"},
+  {day:"Friday", date:"June 19", time:"10:45–11:00 AM", num:"35", title:"Reliability of Portable vs. Conventional Ultrasound for Tendon Morphology Assessment", desc:"Handheld portable vs cart-based ultrasound for tendon morphology (Achilles, patellar, quadriceps, distal elbow flexor) in healthy adults.", speakers:["Allee Schellenberger"], moderator:"Richard Kreider, PhD, FISSN", room:"Salons DEF", note:"Greenwood Memorial Student Talks"},
+  {day:"Friday", date:"June 19", time:"11:00–11:30 AM", num:"Awards", title:"ISSN Updates and Awards", desc:"Poster & Blitz awards, JISSN update, New FISSN, Position Stands update. AG1 sponsors poster prizes. Must be present to win.", speakers:[], moderator:"", room:"Salons DEF", note:"Must be present"},
+  {day:"Friday", date:"June 19", time:"11:30 AM", num:"Closing", title:"Closing Remarks", desc:"Closing remarks and look-ahead to 2027 (Jupiter, FL).", speakers:[], moderator:"", room:"Salons DEF", type:"event"}
+];
+
+// ===== STATE =====
+let activeDay = "all";
+let starredOnly = false;
+let searchTerm = "";
+let starred = JSON.parse(localStorage.getItem("issn2026_starred") || "[]");
+let expanded = new Set();
+
+function key(s) { return s.day + "_" + s.num + "_" + s.title.slice(0, 20); }
+
+function render() {
+  const container = document.getElementById("sessions");
+  container.innerHTML = "";
+  const days = activeDay === "all" ? ["Wednesday","Thursday","Friday"] : [activeDay];
+
+  days.forEach(day => {
+    const dayList = SESSIONS.filter(s => s.day === day).filter(s => {
+      if (starredOnly && !starred.includes(key(s)) && s.type !== "yours") return false;
+      if (searchTerm) {
+        const haystack = [s.title, s.desc, s.speakers.join(" "), s.moderator, s.sponsor || "", s.num].join(" ").toLowerCase();
+        if (!haystack.includes(searchTerm.toLowerCase())) return false;
+      }
+      return true;
+    });
+    if (dayList.length === 0) return;
+
+    const h = document.createElement("h2");
+    h.className = "day-header";
+    h.textContent = `${day} • ${dayList[0].date}`;
+    container.appendChild(h);
+
+    dayList.forEach(s => container.appendChild(renderSession(s)));
+  });
+
+  if (container.innerHTML === "") {
+    container.innerHTML = '<p style="text-align:center;color:#888;padding:40px;">No sessions match.</p>';
+  }
+}
+
+function renderSession(s) {
+  const k = key(s);
+  const isStarred = starred.includes(k);
+  const isExpanded = expanded.has(k);
+
+  const div = document.createElement("div");
+  div.className = "session";
+  if (s.type === "break") div.classList.add("break");
+  if (s.type === "yours") div.classList.add("yours");
+  if (s.conflict) div.classList.add("conflict");
+  if (isExpanded) div.classList.add("expanded");
+
+  const speakersHtml = s.speakers.map(name =>
+    BIOS[name] ? `<span class="speaker-link" onclick="showBio('${name.replace(/'/g,"\\'")}')">${name}</span>` : name
+  ).join(", ");
+
+  div.innerHTML = `
+    <div>
+      <div class="time">${s.time}</div>
+      <span class="session-num">${s.num}</span>
+    </div>
+    <div class="body">
+      <div class="title">${s.title}</div>
+      ${speakersHtml ? `<div class="speakers">${speakersHtml}</div>` : ''}
+      ${s.moderator ? `<div class="meta"><strong>Moderator:</strong> ${s.moderator}</div>` : ''}
+      ${s.room && s.type !== "break" ? `<div class="meta"><strong>Room:</strong> ${s.room}</div>` : ''}
+      <div class="badges">
+        ${s.sponsor ? `<span class="badge">Sponsored: ${s.sponsor}</span>` : ''}
+        ${s.note ? `<span class="badge">${s.note}</span>` : ''}
+        ${s.conflict ? `<span class="badge warn">⚠ ${s.conflict}</span>` : ''}
+      </div>
+      ${s.desc ? `<div class="description">${s.desc}</div>` : ''}
+      ${s.desc ? `<button class="expand-btn" onclick="toggleExpand('${k.replace(/'/g,"\\'")}')">${isExpanded ? '− Hide details' : '+ Show details'}</button>` : ''}
+    </div>
+    <button class="star ${isStarred ? 'active' : ''}" onclick="toggleStar('${k.replace(/'/g,"\\'")}')" title="${isStarred ? 'Unstar' : 'Star'}">★</button>
+  `;
+  return div;
+}
+
+function toggleStar(k) {
+  if (starred.includes(k)) starred = starred.filter(x => x !== k);
+  else starred.push(k);
+  localStorage.setItem("issn2026_starred", JSON.stringify(starred));
+  render();
+}
+
+function toggleExpand(k) {
+  if (expanded.has(k)) expanded.delete(k);
+  else expanded.add(k);
+  render();
+}
+
+function showBio(name) {
+  document.getElementById("modalName").textContent = name;
+  document.getElementById("modalBio").textContent = BIOS[name] || "No bio available.";
+  document.getElementById("modalBg").classList.add("open");
+}
+function closeModal() { document.getElementById("modalBg").classList.remove("open"); }
+document.getElementById("modalBg").addEventListener("click", e => {
+  if (e.target.id === "modalBg") closeModal();
+});
+
+document.querySelectorAll(".day-tab").forEach(t => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".day-tab").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    activeDay = t.dataset.day;
+    render();
+  });
+});
+document.getElementById("starredOnly").addEventListener("click", e => {
+  starredOnly = !starredOnly;
+  e.target.classList.toggle("active", starredOnly);
+  e.target.textContent = starredOnly ? "★ Showing starred" : "★ Starred only";
+  render();
+});
+document.getElementById("search").addEventListener("input", e => {
+  searchTerm = e.target.value;
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
