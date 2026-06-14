@@ -29,14 +29,112 @@
     margin: 0;
     line-height: 1.5;
   }
-  header {
+  header ge with 
     background: var(--accent);
     color: white;
     padding: 24px 20px;
     text-align: center;
+    position: relative;
   }
-  header h1 { margin: 0 0 4px; font-size: 1.6rem; }
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 1.6rem;
+    cursor: pointer;
+  }
+  header h1:hover { opacity: 0.92; }
   header p { margin: 0; opacity: 0.85; font-size: 0.95rem; }
+  .header-home {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: white;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.82rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .header-home:hover { background: rgba(255, 255, 255, 0.22); }
+  .app-screen { display: none; }
+  .app-screen.active { display: block; }
+  .landing {
+    min-height: calc(100vh - 0px);
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 20% 20%, rgba(31, 78, 120, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 70%, rgba(217, 225, 242, 0.6) 0%, transparent 45%),
+      linear-gradient(160deg, var(--bg) 0%, #eef2f8 100%);
+  }
+  .landing-bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+  }
+  .landing-inner {
+    position: relative;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 20px 60px;
+    text-align: center;
+  }
+  .landing-inner h1 {
+    margin: 0 0 8px;
+    font-size: clamp(1.6rem, 4vw, 2.1rem);
+    color: var(--accent);
+  }
+  .landing-inner .landing-sub {
+    margin: 0 0 36px;
+    color: var(--muted);
+    font-size: 1.05rem;
+  }
+  .landing-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  .landing-tab {
+    display: block;
+    width: 100%;
+    padding: 20px 24px;
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .landing-tab:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(31, 78, 120, 0.12);
+  }
+  .landing-tab strong {
+    display: block;
+    font-size: 1.15rem;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .landing-tab span {
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  .planner-empty {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 20px;
+    margin-bottom: 20px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .planner-empty p { margin: 0 0 16px; }
   .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
   .controls {
     background: var(--card);
@@ -356,37 +454,94 @@
       right: 10px;
       width: auto;
     }
+    .header-home {
+      position: static;
+      transform: none;
+      display: block;
+      margin: 0 auto 12px;
+    }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1>ISSN 2026 — Fort Lauderdale</h1>
+<header id="appHeader" hidden>
+  <button type="button" class="header-home" id="homeBtn">← Home</button>
+  <h1 id="headerTitle">ISSN 2026 — Fort Lauderdale</h1>
   <p>The Westin Fort Lauderdale Beach Resort • June 17–19, 2026</p>
 </header>
-<div id="liveBanner" class="live-banner" hidden>
-  <div class="live-banner-inner">
-    <span class="live-pulse" aria-hidden="true">•</span>
-    <span id="liveBannerText" class="live-banner-text"></span>
-    <button type="button" id="liveJumpBtn" class="live-jump-btn" hidden>Jump to session</button>
-  </div>
-</div>
-<div class="container">
-  <div class="controls">
-    <input type="text" id="search" placeholder="Search title, speaker, topic…">
-    <div class="day-tabs">
-      <button class="day-tab active" data-day="all">All</button>
-      <button class="day-tab" data-day="Wednesday">Wed</button>
-      <button class="day-tab" data-day="Thursday">Thu</button>
-      <button class="day-tab" data-day="Friday">Fri</button>
+
+<div id="screenLanding" class="app-screen active">
+  <div class="landing">
+    <svg class="landing-bg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="bondGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#1f4e78" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#d9e1f2" stop-opacity="0.15"/>
+        </linearGradient>
+      </defs>
+      <g fill="none" stroke="url(#bondGrad)" stroke-width="1.5">
+        <circle cx="120" cy="100" r="8"/><circle cx="200" cy="60" r="6"/><circle cx="280" cy="120" r="7"/>
+        <line x1="120" y1="100" x2="200" y2="60"/><line x1="200" y1="60" x2="280" y2="120"/>
+        <circle cx="600" cy="480" r="8"/><circle cx="680" cy="440" r="6"/><circle cx="720" cy="520" r="7"/>
+        <line x1="600" y1="480" x2="680" y2="440"/><line x1="680" y1="440" x2="720" y2="520"/>
+      </g>
+      <path d="M400,80 Q460,200 400,320 Q340,440 400,560" fill="none" stroke="#1f4e78" stroke-opacity="0.12" stroke-width="2"/>
+      <path d="M430,100 Q490,220 430,340 Q370,460 430,540" fill="none" stroke="#d9e1f2" stroke-opacity="0.5" stroke-width="1.5"/>
+    </svg>
+    <div class="landing-inner">
+      <h1>ISSN 2026 Conference Planner</h1>
+      <p class="landing-sub">Fort Lauderdale · June 17–19</p>
+      <div class="landing-tabs">
+        <button type="button" class="landing-tab" data-view="schedule">
+          <strong>Conference Schedule</strong>
+          <span>Browse all sessions by day, search talks, and see what&apos;s live now.</span>
+        </button>
+        <button type="button" class="landing-tab" data-view="planner">
+          <strong>My Planner</strong>
+          <span>Your starred sessions and poster — print or export to calendar.</span>
+        </button>
+      </div>
     </div>
-    <button class="toggle-starred" id="starredOnly">★ Starred only</button>
-    <button class="toggle-starred" id="printSchedule" type="button">Print My Schedule</button>
-    <button class="toggle-starred" id="exportCalendar" type="button">Export to Calendar (.ics)</button>
-    <p class="schedule-hint" id="scheduleHint" hidden>Print and calendar export will include your poster only until you star other sessions.</p>
   </div>
-  <div id="sessions"></div>
 </div>
+
+<div id="screenSchedule" class="app-screen">
+  <div id="liveBanner" class="live-banner" hidden>
+    <div class="live-banner-inner">
+      <span class="live-pulse" aria-hidden="true">•</span>
+      <span id="liveBannerText" class="live-banner-text"></span>
+      <button type="button" id="liveJumpBtn" class="live-jump-btn" hidden>Jump to session</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="controls">
+      <input type="text" id="search" placeholder="Search title, speaker, topic…">
+      <div class="day-tabs">
+        <button class="day-tab active" data-day="all">All</button>
+        <button class="day-tab" data-day="Wednesday">Wed</button>
+        <button class="day-tab" data-day="Thursday">Thu</button>
+        <button class="day-tab" data-day="Friday">Fri</button>
+      </div>
+    </div>
+    <div id="sessions"></div>
+  </div>
+</div>
+
+<div id="screenPlanner" class="app-screen">
+  <div class="container">
+    <div class="controls">
+      <button class="toggle-starred" id="printSchedule" type="button">Print My Schedule</button>
+      <button class="toggle-starred" id="exportCalendar" type="button">Export to Calendar (.ics)</button>
+      <p class="schedule-hint" id="scheduleHint" hidden>Print and calendar export will include your poster only until you star other sessions.</p>
+    </div>
+    <div class="planner-empty" id="plannerEmpty" hidden>
+      <p>You haven&apos;t marked any sessions as interesting yet. Head to the Conference Schedule and tap the star on talks you want to attend.</p>
+      <button type="button" class="toggle-starred" id="plannerGoSchedule">Go to Conference Schedule</button>
+    </div>
+    <div id="plannerSessions"></div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalBg">
   <div class="modal">
     <button class="close" onclick="closeModal()">×</button>
@@ -632,7 +787,7 @@ function lastSessionOfDay(dayName) {
 function setLiveSessionKey(k) {
   if (liveSessionKey === k) return;
   liveSessionKey = k;
-  render();
+  renderSchedule();
 }
 
 function scheduleBannerUpdate(intervalMs) {
@@ -727,10 +882,11 @@ function jumpToLiveSession() {
 
 // ===== STATE =====
 let activeDay = "all";
-let starredOnly = false;
 let searchTerm = "";
 let starred = JSON.parse(localStorage.getItem("issn2026_starred") || "[]");
 let expanded = new Set();
+let currentView = "landing";
+let showConflictBadgesInRender = false;
 
 function key(s) { return s.day + "_" + s.num + "_" + s.title.slice(0, 20); }
 
@@ -802,7 +958,7 @@ function conflictBadgeLabel(other) {
 }
 
 function starConflictBadgeHtml(s) {
-  if (!starredOnly) return "";
+  if (!showConflictBadgesInRender) return "";
   const conflicts = findConflictsFor(s);
   if (!conflicts.length) return "";
   const labels = conflicts.map(conflictBadgeLabel).join(", ");
@@ -837,36 +993,81 @@ function showConflictToast(conflicts) {
   conflictToastTimer = setTimeout(dismissConflictToast, 6000);
 }
 
-function render() {
-  const container = document.getElementById("sessions");
+function showView(view) {
+  if (view !== "landing" && view !== "schedule" && view !== "planner") view = "landing";
+  currentView = view;
+  localStorage.setItem("issn2026_view", view);
+  document.getElementById("screenLanding").classList.toggle("active", view === "landing");
+  document.getElementById("screenSchedule").classList.toggle("active", view === "schedule");
+  document.getElementById("screenPlanner").classList.toggle("active", view === "planner");
+  document.getElementById("appHeader").hidden = view === "landing";
+  window.scrollTo(0, 0);
+  if (view === "schedule") {
+    renderSchedule();
+    updateLiveBanner();
+  } else if (view === "planner") {
+    renderPlanner();
+  }
+}
+
+function goHome() {
+  showView("landing");
+}
+
+function renderSessionList(containerId, filterStarred) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
   container.innerHTML = "";
-  const days = activeDay === "all" ? ["Wednesday","Thursday","Friday"] : [activeDay];
+  const days = filterStarred
+    ? ["Wednesday", "Thursday", "Friday"]
+    : (activeDay === "all" ? ["Wednesday", "Thursday", "Friday"] : [activeDay]);
 
   days.forEach(day => {
-    const dayList = SESSIONS.filter(s => s.day === day).filter(s => {
-      if (starredOnly && !starred.includes(key(s)) && s.type !== "yours") return false;
-      if (searchTerm) {
-        const haystack = [s.title, s.desc, s.speakers.join(" "), s.moderator, s.sponsor || "", s.num].join(" ").toLowerCase();
-        if (!haystack.includes(searchTerm.toLowerCase())) return false;
-      }
-      return true;
-    });
+    let dayList = SESSIONS.filter(s => s.day === day);
+    if (filterStarred) {
+      dayList = dayList
+        .filter(s => starred.includes(key(s)) || s.type === "yours")
+        .sort((a, b) => sessionStartMinutes(a) - sessionStartMinutes(b));
+    } else {
+      dayList = dayList.filter(s => {
+        if (searchTerm) {
+          const haystack = [s.title, s.desc, s.speakers.join(" "), s.moderator, s.sponsor || "", s.num].join(" ").toLowerCase();
+          if (!haystack.includes(searchTerm.toLowerCase())) return false;
+        }
+        return true;
+      });
+    }
     if (dayList.length === 0) return;
 
     const h = document.createElement("h2");
     h.className = "day-header";
     h.textContent = `${day} • ${dayList[0].date}`;
     container.appendChild(h);
-
-    dayList.forEach(s => container.appendChild(renderSession(s)));
+    dayList.forEach(s => container.appendChild(renderSession(s, containerId === "sessions")));
   });
 
-  if (container.innerHTML === "") {
+  if (!filterStarred && container.innerHTML === "") {
     container.innerHTML = '<p style="text-align:center;color:#888;padding:40px;">No sessions match.</p>';
   }
 }
 
-function renderSession(s) {
+function renderSchedule() {
+  showConflictBadgesInRender = false;
+  renderSessionList("sessions", false);
+}
+
+function renderPlanner() {
+  document.getElementById("plannerEmpty").hidden = hasStarredSessions();
+  showConflictBadgesInRender = true;
+  renderSessionList("plannerSessions", true);
+}
+
+function render() {
+  renderSchedule();
+  renderPlanner();
+}
+
+function renderSession(s, isScheduleView) {
   const k = key(s);
   const isStarred = starred.includes(k);
   const isExpanded = expanded.has(k);
@@ -879,7 +1080,7 @@ function renderSession(s) {
   if (isExpanded) div.classList.add("expanded");
   if (k === liveSessionKey) {
     div.classList.add("live-now");
-    div.id = "live-session";
+    if (isScheduleView) div.id = "live-session";
   }
 
   const speakersHtml = s.speakers.map(name =>
@@ -1195,26 +1396,27 @@ document.querySelectorAll(".day-tab").forEach(t => {
     document.querySelectorAll(".day-tab").forEach(x => x.classList.remove("active"));
     t.classList.add("active");
     activeDay = t.dataset.day;
-    render();
+    renderSchedule();
   });
-});
-document.getElementById("starredOnly").addEventListener("click", e => {
-  starredOnly = !starredOnly;
-  e.target.classList.toggle("active", starredOnly);
-  e.target.textContent = starredOnly ? "★ Showing starred" : "★ Starred only";
-  render();
 });
 document.getElementById("search").addEventListener("input", e => {
   searchTerm = e.target.value;
-  render();
+  renderSchedule();
 });
+document.querySelectorAll(".landing-tab").forEach(btn => {
+  btn.addEventListener("click", () => showView(btn.dataset.view));
+});
+document.getElementById("homeBtn").addEventListener("click", goHome);
+document.getElementById("headerTitle").addEventListener("click", goHome);
+document.getElementById("plannerGoSchedule").addEventListener("click", () => showView("schedule"));
 document.getElementById("printSchedule").addEventListener("click", printMySchedule);
 document.getElementById("exportCalendar").addEventListener("click", exportToCalendar);
 document.getElementById("liveJumpBtn").addEventListener("click", jumpToLiveSession);
 
 updateScheduleHint();
 updateLiveBanner();
-render();
+const savedView = localStorage.getItem("issn2026_view");
+showView(savedView === "schedule" || savedView === "planner" ? savedView : "landing");
 </script>
 </body>
 </html>
